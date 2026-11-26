@@ -59,3 +59,9 @@ dist
 .v[0-9]*/
 # Local agent validation evidence
 .agent-validation/
+
+# Swarm IDE built-in extension prebuilt dist & Rust backend target
+!extensions/swarm-ide/dist/
+!extensions/swarm-ide/dist/**
+/extensions/swarm-ide/bin/*.exe
+/swarm-server-rust/target/

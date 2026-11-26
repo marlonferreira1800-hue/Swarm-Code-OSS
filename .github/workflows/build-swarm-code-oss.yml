@@ -1,0 +1,144 @@
+name: Build Swarm IDE (Code-OSS Windows x64)
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - 'product.json'
+      - 'extensions/swarm-ide/**'
+      - 'swarm-server-rust/**'
+      - '.github/workflows/build-swarm-code-oss.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build-win32-x64:
+    name: Build Swarm IDE (win32-x64)
+    runs-on: windows-latest
+    timeout-minutes: 90
+    env:
+      VSCODE_ARCH: x64
+      npm_config_arch: x64
+      VSCODE_SKIP_PRELAUNCH: '1'
+      VSCODE_SKIP_NODE_VERSION_CHECK: '1'
+      ELECTRON_SKIP_BINARY_DOWNLOAD: '0'
+      PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+
+    steps:
+      - name: Checkout Swarm-Code-OSS
+        uses: actions/checkout@v4
+
+      - name: Read Node.js version from .nvmrc
+        id: nvmrc
+        shell: pwsh
+        run: |
+          $nodeVersion = (Get-Content .nvmrc -Raw).Trim()
+          if (-not $nodeVersion) { throw '.nvmrc is empty' }
+          "node-version=$nodeVersion" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ steps.nvmrc.outputs.node-version }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust build (swarm-server-rust)
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: swarm-server-rust
+
+      - name: Test and build swarm-server-rust
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          cargo test --manifest-path swarm-server-rust/Cargo.toml
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cargo build --release --manifest-path swarm-server-rust/Cargo.toml
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          New-Item -ItemType Directory -Force -Path extensions/swarm-ide/bin | Out-Null
+          Copy-Item swarm-server-rust/target/release/swarm-server-rust.exe extensions/swarm-ide/bin/swarm-server-rust.exe -Force
+          Get-Item extensions/swarm-ide/bin/swarm-server-rust.exe
+
+      - name: Install Code-OSS dependencies
+        shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          pnpm run preinstall
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          for ($i = 1; $i -le 3; $i++) {
+            pnpm install --frozen-lockfile
+            if ($LASTEXITCODE -eq 0) { break }
+            if ($i -eq 3) { throw "pnpm install failed after 3 attempts" }
+            Write-Host "pnpm install attempt $i failed, retrying in 5s..."
+            Start-Sleep -Seconds 5
+          }
+
+      - name: Prepare Electron types
+        shell: pwsh
+        run: node build/npm/electronTypes.ts
+
+      - name: Build Code-OSS core and extensions (core-ci + copilot)
+        shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          pnpm run gulp core-ci
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          pnpm run gulp compile-copilot-extension-build
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Package Swarm IDE (vscode-win32-x64-min-ci)
+        shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $sdkBin = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin\10.*\x64" -Directory -ErrorAction SilentlyContinue |
+            Sort-Object Name -Descending |
+            Select-Object -First 1
+          if (-not $sdkBin) {
+            throw "Windows Kits 10 x64 bin directory not found under C:\Program Files (x86)\Windows Kits\10\bin"
+          }
+          Write-Host "Prepending Windows Kits x64 bin to PATH: $($sdkBin.FullName)"
+          $env:PATH = "$($sdkBin.FullName);$env:PATH"
+          pnpm run gulp vscode-win32-x64-min-ci
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Compress Swarm-IDE-CodeOSS-win32-x64.zip
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $sourceDir = (Resolve-Path "..\VSCode-win32-x64").Path
+          $zipPath = Join-Path (Split-Path $sourceDir -Parent) "Swarm-IDE-CodeOSS-win32-x64.zip"
+          if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
+          if (Get-Command 7z -ErrorAction SilentlyContinue) {
+            7z a -tzip -mx=5 $zipPath "$sourceDir\*"
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          } else {
+            Compress-Archive -Path "$sourceDir\*" -DestinationPath $zipPath -Force
+          }
+          Get-Item $zipPath
+
+      - name: Upload Swarm-IDE-CodeOSS-win32-x64 artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Swarm-IDE-CodeOSS-win32-x64
+          path: ..\Swarm-IDE-CodeOSS-win32-x64.zip
+          if-no-files-found: error
+          retention-days: 14

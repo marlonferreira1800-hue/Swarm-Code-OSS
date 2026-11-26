@@ -1,0 +1,27 @@
+[package]
+name = "swarm-server-rust"
+version = "0.1.0"
+edition = "2021"
+description = "Swarm IDE backend orchestrator in Rust (Axum + Tokio), wire-compatible with shared/types.ts"
+
+[lib]
+name = "swarm_server"
+path = "src/lib.rs"
+
+[[bin]]
+name = "swarm-server-rust"
+path = "src/main.rs"
+
+[dependencies]
+async-trait = "0.1"
+axum = { version = "0.7", features = ["ws"] }
+futures = "0.3"
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["full"] }
+uuid = { version = "1", features = ["v4"] }
+
+[profile.dev]
+debug = 0
+incremental = false

@@ -1,0 +1,10 @@
+node_modules/**
+src/**
+*.vsix
+*.tsbuildinfo
+.vscode/**
+!package.json
+!README.md
+!dist/**
+!media/**
+!bin/**

@@ -1,0 +1,88 @@
+{
+  "name": "swarm-ide",
+  "displayName": "Swarm IDE — Enxame ao Vivo",
+  "publisher": "swarm-ide",
+  "version": "0.1.0",
+  "description": "Orquestrador visual multiagente em Tela Única conectado ao motor Rust SwarmEngine",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "AI",
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "swarm-ide",
+          "title": "Swarm IDE",
+          "icon": "media/swarm-icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "swarm-ide": [
+        {
+          "type": "webview",
+          "id": "swarm-ide.sidebar",
+          "name": "Swarm Enxame"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "swarmIde.openLiveScreen",
+        "title": "Swarm IDE: Abrir Tela Única do Enxame"
+      },
+      {
+        "command": "swarmIde.sendPrompt",
+        "title": "Swarm IDE: Enviar Tarefa ao Enxame"
+      },
+      {
+        "command": "swarmIde.startServer",
+        "title": "Swarm IDE: Iniciar Motor Rust"
+      },
+      {
+        "command": "swarmIde.stopServer",
+        "title": "Swarm IDE: Parar Motor Rust"
+      }
+    ],
+    "configuration": {
+      "title": "Swarm IDE",
+      "properties": {
+        "swarmIde.port": {
+          "type": "number",
+          "default": 4000,
+          "description": "Porta HTTP/WebSocket do motor Rust SwarmEngine"
+        },
+        "swarmIde.autoStartServer": {
+          "type": "boolean",
+          "default": true,
+          "description": "Iniciar automaticamente o motor Rust ao ativar a extensão"
+        },
+        "swarmIde.serverBinaryPath": {
+          "type": "string",
+          "default": "",
+          "description": "Caminho opcional para o binário swarm-server-rust"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "tsc --noEmit && node esbuild.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/vscode": "^1.85.0",
+    "@types/ws": "^8.5.10",
+    "esbuild": "^0.24.0",
+    "typescript": "^5.6.0",
+    "ws": "^8.18.0"
+  }
+}
